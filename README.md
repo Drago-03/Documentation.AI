@@ -1,0 +1,2 @@
+# Documentation.AI
+Documentation generator
