@@ -43,10 +43,70 @@ wait_for_service() {
     return 1
 }
 
+# Function to setup Python environment
+setup_python_environment() {
+    echo -e "${BLUE}� Setting up Python environment...${NC}"
+    
+    # Check if virtual environment exists
+    if [ ! -d ".venv" ]; then
+        echo -e "${YELLOW}📦 Creating virtual environment...${NC}"
+        python3 -m venv .venv
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}❌ Failed to create virtual environment${NC}"
+            return 1
+        fi
+    fi
+    
+    # Activate virtual environment
+    source .venv/bin/activate
+    
+    # Upgrade pip
+    echo -e "${YELLOW}📦 Upgrading pip...${NC}"
+    pip install --upgrade pip
+    
+    # Install essential dependencies first
+    echo -e "${YELLOW}📦 Installing essential dependencies...${NC}"
+    pip install flask flask-cors flask-sqlalchemy python-dotenv requests
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✅ Essential dependencies installed${NC}"
+        
+        # Test Flask import
+        python -c "import flask; print('✅ Flask version:', flask.__version__)" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✅ Flask import test successful${NC}"
+        else
+            echo -e "${RED}❌ Flask import test failed${NC}"
+            return 1
+        fi
+        
+        # Install remaining dependencies if requirements.txt exists
+        if [ -f "requirements.txt" ]; then
+            echo -e "${YELLOW}📦 Installing remaining dependencies from requirements.txt...${NC}"
+            pip install -r requirements.txt
+        fi
+        
+        return 0
+    else
+        echo -e "${RED}❌ Failed to install essential dependencies${NC}"
+        return 1
+    fi
+}
+
 # Check environment configuration
 echo -e "${BLUE}🔍 Environment Configuration:${NC}"
 cd /Users/mantejsingh/Desktop/Documentation.AI
-python -c "
+
+# Setup Python environment
+if setup_python_environment; then
+    PYTHON_CMD=".venv/bin/python"
+    echo -e "${GREEN}✅ Using virtual environment Python${NC}"
+else
+    PYTHON_CMD="python3"
+    echo -e "${YELLOW}⚠️  Falling back to system Python${NC}"
+fi
+
+$PYTHON_CMD -c "
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -89,9 +149,18 @@ fi
 
 echo ""
 echo -e "${BLUE}🔍 Dependencies Check:${NC}"
-if command -v python &> /dev/null; then
-    python_version=$(python --version 2>&1)
+if command -v $PYTHON_CMD &> /dev/null; then
+    python_version=$($PYTHON_CMD --version 2>&1)
     echo -e "${GREEN}✅ Python: $python_version${NC}"
+    
+    # Test Flask import
+    if $PYTHON_CMD -c "import flask" 2>/dev/null; then
+        flask_version=$($PYTHON_CMD -c "import flask; print(flask.__version__)" 2>/dev/null)
+        echo -e "${GREEN}✅ Flask: $flask_version${NC}"
+    else
+        echo -e "${RED}❌ Flask not installed${NC}"
+        echo -e "${YELLOW}💡 Run: pip install flask or use virtual environment${NC}"
+    fi
 else
     echo -e "${RED}❌ Python not found${NC}"
     exit 1
@@ -136,7 +205,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
     
     # Start backend
     echo -e "${BLUE}🎯 Starting backend server...${NC}"
-    python app.py > backend.log 2>&1 &
+    $PYTHON_CMD app.py > backend.log 2>&1 &
     BACKEND_PID=$!
     
     # Wait for backend to be ready
@@ -145,7 +214,7 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         
         # Test backend health
         echo -e "${BLUE}🔬 Testing backend health...${NC}"
-        curl -s http://localhost:5002/api/health | python -m json.tool 2>/dev/null || echo "Health check returned non-JSON response"
+        curl -s http://localhost:5002/api/health | $PYTHON_CMD -m json.tool 2>/dev/null || echo "Health check returned non-JSON response"
         
     else
         echo -e "${RED}❌ Backend failed to start. Check backend.log:${NC}"
@@ -204,6 +273,6 @@ else
     echo -e "${YELLOW}✋ Startup cancelled. You can run this script again when ready.${NC}"
     echo ""
     echo -e "${BLUE}🔧 Manual startup commands:${NC}"
-    echo -e "   Backend: python app.py"
+    echo -e "   Backend: $PYTHON_CMD app.py"
     echo -e "   Frontend: cd frontend && npm start"
 fi

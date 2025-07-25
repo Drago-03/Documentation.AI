@@ -30,9 +30,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import AI models
 try:
-    from ai_models.github_analyzer import GitHubAnalyzer
-    from ai_models.documentation_generator import DocumentationGenerator
-    from ai_models.rag_pipeline import RAGPipeline
+    from ai_models.github_analyzer import GitHubAnalyzer as GitHubAnalyzerModel
+    from ai_models.documentation_generator import DocumentationGenerator as DocumentationGeneratorModel
+    from ai_models.rag_pipeline import RAGPipeline as RAGPipelineModel
     logger = logging.getLogger(__name__)
     logger.info("AI models imported successfully")
 except ImportError as e:
@@ -48,12 +48,14 @@ except ImportError as e:
         def analyze_repository(self, repo_url: str) -> Dict[str, Any]:
             raise Exception("AI models not available - import failed")
     
-    class DocumentationGenerator:
-        def generate_documentation(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+    class DummyDocumentationGenerator:
+        def generate_documentation(self, analysis_result: Dict[str, Any], rag_result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
             raise Exception("AI models not available - import failed")
     
     class RAGPipeline:
         def process(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+            raise Exception("AI models not available - import failed")
+        def process_repository(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
             raise Exception("AI models not available - import failed")
 
 # Load environment variables
@@ -333,7 +335,7 @@ class DocumentationGenerator:
     def __init__(self):
         self.template_path = Path(__file__).parent / 'templates'
     
-    def generate_documentation(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_documentation(self, analysis_result: Dict[str, Any], rag_result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Generate complete documentation package"""
         try:
             repo_info = analysis_result.get('repository_info', {})
@@ -1433,7 +1435,11 @@ class RepositoryFileManager:
 
 # Initialize components with better error handling
 try:
-    github_analyzer = GitHubAnalyzer()
+    # Check if GitHubAnalyzerModel was successfully imported
+    if 'GitHubAnalyzerModel' in locals() or 'GitHubAnalyzerModel' in globals():
+        github_analyzer = GitHubAnalyzerModel()
+    else:
+        github_analyzer = GitHubAnalyzer()
     logger.info("✅ GitHubAnalyzer initialized successfully")
 except Exception as e:
     logger.error(f"❌ Failed to initialize GitHubAnalyzer: {e}")
@@ -1447,19 +1453,19 @@ except Exception as e:
     github_analyzer = FallbackGitHubAnalyzer()
 
 try:
-    doc_generator = DocumentationGenerator()
+    doc_generator = DocumentationGeneratorModel() if 'DocumentationGeneratorModel' in globals() else DocumentationGenerator()
     logger.info("✅ DocumentationGenerator initialized successfully")
 except Exception as e:
     logger.error(f"❌ Failed to initialize DocumentationGenerator: {e}")
     logger.error(traceback.format_exc())
     # Create a fallback class
     class FallbackDocumentationGenerator:
-        def generate_documentation(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+        def generate_documentation(self, analysis_result: Dict[str, Any], rag_result: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
             raise Exception(f"DocumentationGenerator initialization failed: {e}")
     doc_generator = FallbackDocumentationGenerator()
 
 try:
-    rag_pipeline = RAGPipeline()
+    rag_pipeline = RAGPipelineModel() if 'RAGPipelineModel' in globals() else RAGPipeline()
     logger.info("✅ RAGPipeline initialized successfully")
 except Exception as e:
     logger.error(f"❌ Failed to initialize RAGPipeline: {e}")
@@ -1495,6 +1501,35 @@ def index():
 def favicon():
     """Handle favicon requests"""
     return '', 204  # No Content
+
+# Handle malformed API URLs with double slashes
+@app.route('/api//<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def handle_double_slash_api(path):
+    """Redirect malformed API URLs with double slashes"""
+    logger.warning(f"Received malformed API URL with double slash: /api//{path}")
+    
+    # For analyze endpoint, handle directly instead of redirecting
+    if path == 'analyze':
+        if request.method == 'GET':
+            return jsonify({
+                'message': 'Repository analysis endpoint',
+                'method': 'POST',
+                'required_fields': ['repo_url'],
+                'description': 'Submit a GitHub repository URL to generate AI documentation',
+                'example': {
+                    'repo_url': 'https://github.com/owner/repository'
+                },
+                'note': 'URL was corrected from double slash'
+            })
+        elif request.method == 'POST':
+            # Forward to the actual analyze function
+            return analyze_repository()
+    
+    # For other endpoints, redirect to the corrected URL
+    corrected_url = f"/api/{path}"
+    logger.info(f"Redirecting to: {corrected_url}")
+    from flask import redirect
+    return redirect(corrected_url)
 
 @app.route('/api/health')
 def health_check():
@@ -1575,6 +1610,7 @@ def health_check():
         }), 500
 
 @app.route('/api/analyze', methods=['GET', 'POST'])
+@app.route('/api/analyze/', methods=['GET', 'POST'])
 def analyze_repository():
     """Handle repository analysis requests"""
     if request.method == 'GET':
@@ -1680,10 +1716,29 @@ def analyze_repository():
                 }
             }), 500
         
-        # Step 2: Generate documentation
+        # Step 2: Process with RAG pipeline
         try:
-            logger.info("Step 2: Generating documentation")
-            documentation = doc_generator.generate_documentation(analysis_result)
+            logger.info("Step 2: Processing with RAG pipeline")
+            rag_result = rag_pipeline.process_repository(analysis_result)
+            logger.info("RAG pipeline processing completed successfully")
+        except Exception as e:
+            logger.error(f"RAG pipeline processing failed: {e}")
+            logger.error(traceback.format_exc())
+            # Continue with empty rag_result as fallback
+            rag_result = {
+                'processing_status': 'failed',
+                'error': str(e),
+                'semantic_insights': [],
+                'code_patterns': [],
+                'knowledge_graph': {},
+                'document_count': 0,
+                'embedding_dimension': 0
+            }
+        
+        # Step 3: Generate documentation
+        try:
+            logger.info("Step 3: Generating documentation")
+            documentation = doc_generator.generate_documentation(analysis_result, rag_result)
             logger.info("Documentation generation completed successfully")
         except Exception as e:
             logger.error(f"Documentation generation failed: {e}")
