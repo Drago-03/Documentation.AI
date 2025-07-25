@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage';
 import AnalysisPage from './pages/AnalysisPage';
 import RepositoryView from './pages/RepositoryView';
 import HistoryPage from './pages/HistoryPage';
+import ProfilePage from './pages/ProfilePage';
 
 // Import components
 import GitHubNavbar from './components/GitHubNavbar';
@@ -53,6 +54,7 @@ function App() {
             <Route path="/analyze" element={<AnalysisPage />} />
             <Route path="/repository/:jobId" element={<RepositoryView />} />
             <Route path="/history" element={<HistoryPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Routes>
         </main>
         

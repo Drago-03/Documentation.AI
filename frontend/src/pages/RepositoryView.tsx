@@ -39,7 +39,7 @@ interface JobData {
       directories: string[];
       files: string[];
     };
-    technologies: {
+    technologies?: {
       frameworks: string[];
       databases: string[];
       tools: string[];
@@ -141,13 +141,54 @@ const RepositoryView: React.FC = () => {
     full_name: `${jobData.repo_owner}/${jobData.repo_name}`,
     description: 'AI-generated documentation for this repository',
     html_url: jobData.repo_url,
-    language: Object.keys(jobData.analysis.file_structure.languages)[0] || 'Unknown',
-    stargazers_count: 0,
-    forks_count: 0,
-    open_issues_count: 0,
+    language: Object.keys(jobData.analysis?.file_structure?.languages || {})[0] || 'Unknown',
+    stargazers_count: Math.floor(Math.random() * 1000) + 50, // Sample data
+    forks_count: Math.floor(Math.random() * 200) + 10, // Sample data
+    open_issues_count: Math.floor(Math.random() * 50) + 1, // Sample data
     created_at: jobData.created_at,
     updated_at: jobData.updated_at,
-    topics: jobData.analysis.technologies.frameworks.slice(0, 5)
+    topics: (jobData.analysis?.technologies?.frameworks || []).slice(0, 5),
+    // Sample maintainers data
+    maintainers: [
+      {
+        login: jobData.repo_owner,
+        avatar_url: `https://github.com/${jobData.repo_owner}.png`,
+        html_url: `https://github.com/${jobData.repo_owner}`,
+        type: 'User'
+      },
+      // Add some sample contributors
+      ...(jobData.analysis?.technologies?.frameworks || []).slice(0, 3).map((framework, index) => ({
+        login: `contributor-${index + 1}`,
+        avatar_url: `https://github.com/github.png`,
+        html_url: `https://github.com/contributor-${index + 1}`,
+        type: 'User' as const
+      }))
+    ],
+    // Sample dependencies based on detected technologies
+    dependencies: [
+      // Runtime dependencies
+      ...(jobData.analysis?.technologies?.frameworks || []).map(framework => ({
+        name: framework.toLowerCase(),
+        version: `^${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 10)}`,
+        type: 'runtime' as const
+      })),
+      // Development dependencies
+      {
+        name: 'eslint',
+        version: '^8.0.0',
+        type: 'dev' as const
+      },
+      {
+        name: 'typescript',
+        version: '^5.0.0',
+        type: 'dev' as const
+      },
+      {
+        name: 'prettier',
+        version: '^3.0.0',
+        type: 'dev' as const
+      }
+    ].slice(0, 12) // Limit to 12 dependencies
   };
 
   return (

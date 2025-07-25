@@ -16,6 +16,13 @@ import {
   Plus,
   GitBranch
 } from 'lucide-react';
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  SignUpButton,
+  UserButton,
+} from '@clerk/clerk-react';
 
 interface GitHubNavbarProps {
   darkMode: boolean;
@@ -109,25 +116,30 @@ const GitHubNavbar: React.FC<GitHubNavbarProps> = ({ darkMode, toggleDarkMode })
           {/* Right side actions */}
           <div className="flex items-center space-x-2">
             {/* Notifications */}
-            <button className={`p-2 rounded-lg transition-colors duration-200 ${
-              darkMode 
-                ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-100' 
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-            }`}>
+            <button 
+              title="Notifications"
+              className={`p-2 rounded-lg transition-colors duration-200 ${
+                darkMode 
+                  ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-100' 
+                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+              }`}>
               <Bell className="h-5 w-5" />
             </button>
 
             {/* Add new */}
-            <button className={`p-2 rounded-lg transition-colors duration-200 ${
-              darkMode 
-                ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-100' 
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-            }`}>
+            <button 
+              title="Add new"
+              className={`p-2 rounded-lg transition-colors duration-200 ${
+                darkMode 
+                  ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-100' 
+                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+              }`}>
               <Plus className="h-5 w-5" />
             </button>
 
             {/* Dark mode toggle */}
             <button
+              title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
               onClick={toggleDarkMode}
               className={`p-2 rounded-lg transition-colors duration-200 ${
                 darkMode 
@@ -138,15 +150,37 @@ const GitHubNavbar: React.FC<GitHubNavbarProps> = ({ darkMode, toggleDarkMode })
               {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
 
-            {/* Profile */}
-            <div className="relative">
-              <button className={`p-2 rounded-lg transition-colors duration-200 ${
-                darkMode 
-                  ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-100' 
-                  : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
-              }`}>
-                <User className="h-5 w-5" />
-              </button>
+            {/* Authentication */}
+            <div className="flex items-center space-x-2">
+              <SignedOut>
+                <SignInButton>
+                  <button className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                    darkMode 
+                      ? 'text-gray-300 hover:bg-gray-800 hover:text-gray-100 border border-gray-600' 
+                      : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 border border-gray-300'
+                  }`}>
+                    Sign In
+                  </button>
+                </SignInButton>
+                <SignUpButton>
+                  <button className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                    darkMode 
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}>
+                    Sign Up
+                  </button>
+                </SignUpButton>
+              </SignedOut>
+              <SignedIn>
+                <UserButton 
+                  appearance={{
+                    elements: {
+                      avatarBox: "h-8 w-8"
+                    }
+                  }}
+                />
+              </SignedIn>
             </div>
 
             {/* Mobile menu toggle */}
@@ -216,6 +250,49 @@ const GitHubNavbar: React.FC<GitHubNavbarProps> = ({ darkMode, toggleDarkMode })
                 </Link>
               );
             })}
+            
+            {/* Mobile Authentication */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+              <SignedOut>
+                <div className="space-y-2">
+                  <SignInButton>
+                    <button 
+                      onClick={() => setIsMenuOpen(false)}
+                      className={`w-full flex items-center justify-center px-3 py-2 rounded-lg text-base font-medium transition-colors duration-200 ${
+                        darkMode 
+                          ? 'text-gray-300 hover:bg-gray-800 hover:text-gray-100 border border-gray-600' 
+                          : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900 border border-gray-300'
+                      }`}
+                    >
+                      Sign In
+                    </button>
+                  </SignInButton>
+                  <SignUpButton>
+                    <button 
+                      onClick={() => setIsMenuOpen(false)}
+                      className={`w-full flex items-center justify-center px-3 py-2 rounded-lg text-base font-medium transition-colors duration-200 ${
+                        darkMode 
+                          ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      Sign Up
+                    </button>
+                  </SignUpButton>
+                </div>
+              </SignedOut>
+              <SignedIn>
+                <div className="flex items-center justify-center">
+                  <UserButton 
+                    appearance={{
+                      elements: {
+                        avatarBox: "h-10 w-10"
+                      }
+                    }}
+                  />
+                </div>
+              </SignedIn>
+            </div>
           </div>
         </div>
       )}
