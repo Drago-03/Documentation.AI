@@ -13,14 +13,21 @@ import GitHubNavbar from './components/GitHubNavbar';
 import Footer from './components/Footer';
 
 function App() {
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => {
+    // Check localStorage for saved theme, default to light mode
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme === 'dark';
+  });
 
   useEffect(() => {
-    // Apply dark mode class to body
+    // Apply dark mode class to html element for better Tailwind support
+    const html = document.documentElement;
     if (darkMode) {
-      document.body.classList.add('dark');
+      html.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
     } else {
-      document.body.classList.remove('dark');
+      html.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
     }
   }, [darkMode]);
 
@@ -33,7 +40,11 @@ function App() {
       v7_startTransition: true,
       v7_relativeSplatPath: true 
     }}>
-      <div className={`min-h-screen ${darkMode ? 'dark bg-gray-900' : 'bg-gray-50'} transition-colors duration-300`}>
+      <div className={`min-h-screen transition-colors duration-300 ${
+        darkMode 
+          ? 'dark bg-gray-900 text-white' 
+          : 'bg-white text-gray-900'
+      }`}>
         <GitHubNavbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
         
         <main className="min-h-screen">

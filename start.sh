@@ -92,7 +92,7 @@ echo -e "${GREEN}🎉 Documentation.AI is running!${NC}"
 echo ""
 echo -e "${BLUE}📱 Access Points:${NC}"
 echo -e "   Frontend: ${GREEN}http://localhost:3000${NC}"
-echo -e "   Backend:  ${GREEN}http://localhost:5000${NC}"
+echo -e "   Backend:  ${GREEN}http://localhost:5002${NC}"
 echo ""
 echo -e "${YELLOW}Press Ctrl+C to stop both servers${NC}"
 

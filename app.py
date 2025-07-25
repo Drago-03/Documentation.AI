@@ -13,15 +13,48 @@ import zipfile
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+import sys
 
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text
 from dotenv import load_dotenv
 import requests
 import re
 from urllib.parse import urlparse
 import traceback
+
+# Add the current directory to Python path for importing ai_models
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Import AI models
+try:
+    from ai_models.github_analyzer import GitHubAnalyzer
+    from ai_models.documentation_generator import DocumentationGenerator
+    from ai_models.rag_pipeline import RAGPipeline
+    logger = logging.getLogger(__name__)
+    logger.info("AI models imported successfully")
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.error(f"Failed to import AI models: {e}")
+    logger.error(traceback.format_exc())
+    # Define dummy classes as fallback
+    class GitHubAnalyzer:
+        def __init__(self):
+            self.github_token = os.getenv('GITHUB_TOKEN')
+        def parse_github_url(self, repo_url: str) -> Dict[str, str]:
+            return {'owner': 'dummy', 'repo': 'dummy'}
+        def analyze_repository(self, repo_url: str) -> Dict[str, Any]:
+            raise Exception("AI models not available - import failed")
+    
+    class DocumentationGenerator:
+        def generate_documentation(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+            raise Exception("AI models not available - import failed")
+    
+    class RAGPipeline:
+        def process(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+            raise Exception("AI models not available - import failed")
 
 # Load environment variables
 load_dotenv()
@@ -41,10 +74,17 @@ db = SQLAlchemy(app)
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('backend.log', mode='a')
+    ]
 )
 logger = logging.getLogger(__name__)
+
+# Set Flask's logger to DEBUG as well
+app.logger.setLevel(logging.DEBUG)
 
 # Database Models
 class AnalysisJob(db.Model):
@@ -1391,10 +1431,47 @@ class RepositoryFileManager:
         if self.temp_dir and Path(self.temp_dir).exists():
             shutil.rmtree(self.temp_dir)
 
-# Initialize components
-github_analyzer = GitHubRepositoryAnalyzer()
-doc_generator = DocumentationGenerator()
+# Initialize components with better error handling
+try:
+    github_analyzer = GitHubAnalyzer()
+    logger.info("✅ GitHubAnalyzer initialized successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize GitHubAnalyzer: {e}")
+    logger.error(traceback.format_exc())
+    # Create a fallback class
+    class FallbackGitHubAnalyzer:
+        def parse_github_url(self, repo_url: str) -> Dict[str, str]:
+            raise Exception(f"GitHubAnalyzer initialization failed: {e}")
+        def analyze_repository(self, repo_url: str) -> Dict[str, Any]:
+            raise Exception(f"GitHubAnalyzer initialization failed: {e}")
+    github_analyzer = FallbackGitHubAnalyzer()
+
+try:
+    doc_generator = DocumentationGenerator()
+    logger.info("✅ DocumentationGenerator initialized successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize DocumentationGenerator: {e}")
+    logger.error(traceback.format_exc())
+    # Create a fallback class
+    class FallbackDocumentationGenerator:
+        def generate_documentation(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+            raise Exception(f"DocumentationGenerator initialization failed: {e}")
+    doc_generator = FallbackDocumentationGenerator()
+
+try:
+    rag_pipeline = RAGPipeline()
+    logger.info("✅ RAGPipeline initialized successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to initialize RAGPipeline: {e}")
+    logger.error(traceback.format_exc())
+    # Create a fallback class
+    class FallbackRAGPipeline:
+        def process(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
+            raise Exception(f"RAGPipeline initialization failed: {e}")
+    rag_pipeline = FallbackRAGPipeline()
+
 file_manager = RepositoryFileManager()
+logger.info("✅ RepositoryFileManager initialized successfully")
 
 # Routes
 @app.route('/')
@@ -1414,79 +1491,263 @@ def index():
         }
     })
 
+@app.route('/favicon.ico')
+def favicon():
+    """Handle favicon requests"""
+    return '', 204  # No Content
+
 @app.route('/api/health')
 def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat(),
-        'version': '2.0.0',
-        'services': {
-            'database': 'connected',
-            'github_api': 'available',
-            'documentation_generator': 'ready'
+    """Enhanced health check endpoint with detailed system status"""
+    try:
+        # Test database connection
+        db_status = "healthy"
+        db_error = None
+        try:
+            with db.engine.connect() as connection:
+                connection.execute(text('SELECT 1'))
+        except Exception as e:
+            db_status = "unhealthy"
+            db_error = str(e)
+        
+        # Check AI models status
+        github_analyzer_status = "healthy" if not hasattr(github_analyzer, '__class__') or 'Fallback' not in github_analyzer.__class__.__name__ else "unhealthy"
+        doc_generator_status = "healthy" if not hasattr(doc_generator, '__class__') or 'Fallback' not in doc_generator.__class__.__name__ else "unhealthy"
+        rag_pipeline_status = "healthy" if not hasattr(rag_pipeline, '__class__') or 'Fallback' not in rag_pipeline.__class__.__name__ else "unhealthy"
+        
+        # Environment variables check
+        env_vars = {
+            'GITHUB_TOKEN': '✅ Set' if os.getenv('GITHUB_TOKEN') else '❌ Missing',
+            'GEMINI_API_KEY': '✅ Set' if os.getenv('GEMINI_API_KEY') else '❌ Missing',
+            'SECRET_KEY': '✅ Set' if os.getenv('SECRET_KEY') else '❌ Using default'
         }
-    })
+        
+        # Overall status
+        overall_status = "healthy" if all([
+            db_status == "healthy",
+            github_analyzer_status == "healthy",
+            doc_generator_status == "healthy"
+        ]) else "degraded"
+        
+        return jsonify({
+            'status': overall_status,
+            'timestamp': datetime.utcnow().isoformat(),
+            'version': '2.0.0',
+            'services': {
+                'database': {
+                    'status': db_status,
+                    'error': db_error
+                },
+                'github_analyzer': {
+                    'status': github_analyzer_status,
+                    'class': type(github_analyzer).__name__
+                },
+                'documentation_generator': {
+                    'status': doc_generator_status,
+                    'class': type(doc_generator).__name__
+                },
+                'rag_pipeline': {
+                    'status': rag_pipeline_status,
+                    'class': type(rag_pipeline).__name__
+                },
+                'file_manager': {
+                    'status': 'healthy',
+                    'class': type(file_manager).__name__
+                }
+            },
+            'environment': env_vars,
+            'endpoints': {
+                'health': '/api/health',
+                'analyze': '/api/analyze',
+                'jobs': '/api/jobs',
+                'job_status': '/api/job/<id>',
+                'download': '/api/download/<id>'
+            }
+        })
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'status': 'critical',
+            'error': str(e),
+            'error_type': type(e).__name__,
+            'traceback': traceback.format_exc().split('\n')
+        }), 500
 
-@app.route('/api/analyze', methods=['POST'])
+@app.route('/api/analyze', methods=['GET', 'POST'])
 def analyze_repository():
-    """Analyze a GitHub repository and generate documentation"""
+    """Handle repository analysis requests"""
+    if request.method == 'GET':
+        # Return information about the endpoint
+        return jsonify({
+            'message': 'Repository analysis endpoint',
+            'method': 'POST',
+            'required_fields': ['repo_url'],
+            'description': 'Submit a GitHub repository URL to generate AI documentation',
+            'example': {
+                'repo_url': 'https://github.com/owner/repository'
+            }
+        })
+    
+    # Handle POST request for actual analysis
     job = None
     try:
+        logger.info("=== Starting repository analysis ===")
+        
+        # Check if AI models are available
+        if hasattr(github_analyzer, '__class__') and 'Fallback' in github_analyzer.__class__.__name__:
+            error_msg = "AI models failed to initialize. Check backend logs for details."
+            logger.error(error_msg)
+            return jsonify({
+                'error': error_msg,
+                'error_type': 'InitializationError',
+                'debug_info': {
+                    'traceback': ['AI models initialization failed during startup']
+                }
+            }), 500
+        
         # Validate request
         if not request.is_json:
+            logger.error("Request is not JSON")
             return jsonify({'error': 'Request must be JSON'}), 400
         
         data = request.get_json()
+        logger.debug(f"Request data: {data}")
+        
         repo_url = data.get('repo_url', '').strip()
         
         if not repo_url:
+            logger.error("Repository URL is missing")
             return jsonify({'error': 'Repository URL is required'}), 400
+        
+        logger.info(f"Processing repository URL: {repo_url}")
         
         # Parse repository URL
         try:
             parsed = github_analyzer.parse_github_url(repo_url)
             owner, repo = parsed['owner'], parsed['repo']
+            logger.info(f"Parsed repository: {owner}/{repo}")
         except ValueError as e:
+            logger.error(f"Failed to parse repository URL: {e}")
             return jsonify({'error': str(e)}), 400
+        except Exception as e:
+            logger.error(f"Unexpected error parsing URL: {e}")
+            logger.error(traceback.format_exc())
+            return jsonify({'error': f'Failed to parse repository URL: {str(e)}'}), 400
         
         # Create analysis job
-        job = AnalysisJob(
-            repo_url=repo_url,
-            repo_name=repo,
-            repo_owner=owner,
-            status='processing'
-        )
-        db.session.add(job)
-        db.session.commit()
+        try:
+            logger.info("Creating analysis job in database")
+            job = AnalysisJob(
+                repo_url=repo_url,
+                repo_name=repo,
+                repo_owner=owner,
+                status='processing'
+            )
+            db.session.add(job)
+            db.session.commit()
+            logger.info(f"Created job with ID: {job.id}")
+        except Exception as e:
+            logger.error(f"Failed to create analysis job: {e}")
+            logger.error(traceback.format_exc())
+            return jsonify({
+                'error': f'Failed to create analysis job: {str(e)}',
+                'error_type': 'DatabaseError',
+                'debug_info': {
+                    'traceback': traceback.format_exc().split('\n')
+                }
+            }), 500
         
         logger.info(f"Starting analysis for repository: {repo_url} (Job ID: {job.id})")
         
         # Step 1: Analyze repository
-        analysis_result = github_analyzer.analyze_repository(repo_url)
+        try:
+            logger.info("Step 1: Analyzing repository")
+            analysis_result = github_analyzer.analyze_repository(repo_url)
+            logger.info("Repository analysis completed successfully")
+        except Exception as e:
+            logger.error(f"Repository analysis failed: {e}")
+            logger.error(traceback.format_exc())
+            job.status = 'failed'
+            job.error_message = f"Repository analysis failed: {str(e)}"
+            db.session.commit()
+            return jsonify({
+                'error': f'Repository analysis failed: {str(e)}',
+                'error_type': 'RepositoryAnalysisError',
+                'job_id': job.id,
+                'debug_info': {
+                    'traceback': traceback.format_exc().split('\n')
+                }
+            }), 500
         
         # Step 2: Generate documentation
-        documentation = doc_generator.generate_documentation(analysis_result)
+        try:
+            logger.info("Step 2: Generating documentation")
+            documentation = doc_generator.generate_documentation(analysis_result)
+            logger.info("Documentation generation completed successfully")
+        except Exception as e:
+            logger.error(f"Documentation generation failed: {e}")
+            logger.error(traceback.format_exc())
+            job.status = 'failed'
+            job.error_message = f"Documentation generation failed: {str(e)}"
+            db.session.commit()
+            return jsonify({
+                'error': f'Documentation generation failed: {str(e)}',
+                'error_type': 'DocumentationGenerationError',
+                'job_id': job.id,
+                'debug_info': {
+                    'traceback': traceback.format_exc().split('\n')
+                }
+            }), 500
         
         # Step 3: Create repository package
-        package_path = file_manager.create_repository_package(
-            documentation, 
-            analysis_result['repository_info']
-        )
+        try:
+            logger.info("Step 3: Creating repository package")
+            package_path = file_manager.create_repository_package(
+                documentation, 
+                analysis_result['repository_info']
+            )
+            logger.info(f"Repository package created: {package_path}")
+        except Exception as e:
+            logger.error(f"Package creation failed: {e}")
+            logger.error(traceback.format_exc())
+            job.status = 'failed'
+            job.error_message = f"Package creation failed: {str(e)}"
+            db.session.commit()
+            return jsonify({
+                'error': f'Package creation failed: {str(e)}',
+                'error_type': 'PackageCreationError',
+                'job_id': job.id,
+                'debug_info': {
+                    'traceback': traceback.format_exc().split('\n')
+                }
+            }), 500
         
         # Update job with results
-        result_data = {
-            'analysis': analysis_result,
-            'documentation': documentation,
-            'package_path': package_path,
-            'generated_at': datetime.utcnow().isoformat()
-        }
-        
-        job.status = 'completed'
-        job.result = json.dumps(result_data)
-        db.session.commit()
-        
-        logger.info(f"Analysis completed for job {job.id}")
+        try:
+            logger.info("Updating job with results")
+            result_data = {
+                'analysis': analysis_result,
+                'documentation': documentation,
+                'package_path': package_path,
+                'generated_at': datetime.utcnow().isoformat()
+            }
+            
+            job.status = 'completed'
+            job.result = json.dumps(result_data)
+            db.session.commit()
+            logger.info(f"Analysis completed successfully for job {job.id}")
+        except Exception as e:
+            logger.error(f"Failed to update job results: {e}")
+            logger.error(traceback.format_exc())
+            return jsonify({
+                'error': f'Failed to save results: {str(e)}',
+                'error_type': 'DatabaseSaveError',
+                'job_id': job.id,
+                'debug_info': {
+                    'traceback': traceback.format_exc().split('\n')
+                }
+            }), 500
         
         return jsonify({
             'job_id': job.id,
@@ -1505,21 +1766,34 @@ def analyze_repository():
         })
         
     except Exception as e:
-        logger.error(f"Error analyzing repository: {e}")
-        logger.error(traceback.format_exc())
+        error_id = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+        logger.error(f"CRITICAL ERROR [{error_id}]: Unhandled exception in analyze_repository")
+        logger.error(f"Error Type: {type(e).__name__}")
+        logger.error(f"Error Message: {str(e)}")
+        logger.error(f"Full Traceback:\n{traceback.format_exc()}")
         
         # Update job status to failed
         if job:
             try:
                 job.status = 'failed'
-                job.error_message = str(e)
+                job.error_message = f"Critical error [{error_id}]: {str(e)}"
                 db.session.commit()
+                logger.info(f"Updated job {job.id} status to failed")
             except Exception as db_error:
                 logger.error(f"Failed to update job status: {db_error}")
+                logger.error(traceback.format_exc())
         
         return jsonify({
             'error': f'Analysis failed: {str(e)}',
-            'job_id': job.id if job else None
+            'error_id': error_id,
+            'error_type': type(e).__name__,
+            'job_id': job.id if job else None,
+            'debug_info': {
+                'traceback': traceback.format_exc().split('\n'),
+                'request_data': request.get_json(silent=True) if request.is_json else None,
+                'github_analyzer_type': type(github_analyzer).__name__,
+                'doc_generator_type': type(doc_generator).__name__
+            }
         }), 500
 
 @app.route('/api/job/<int:job_id>')
@@ -1624,6 +1898,66 @@ def download_documentation(job_id):
         logger.error(f"Error downloading documentation: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.errorhandler(Exception)
+def handle_all_exceptions(error):
+    """Handle all unhandled exceptions with detailed error information"""
+    error_id = datetime.utcnow().strftime('%Y%m%d_%H%M%S_%f')
+    
+    # Log the full error details
+    logger.error(f"ERROR_ID: {error_id}")
+    logger.error(f"Exception Type: {type(error).__name__}")
+    logger.error(f"Exception Message: {str(error)}")
+    logger.error(f"Request URL: {request.url}")
+    logger.error(f"Request Method: {request.method}")
+    logger.error(f"Request Headers: {dict(request.headers)}")
+    if request.is_json:
+        logger.error(f"Request JSON: {request.get_json(silent=True)}")
+    logger.error(f"Full Traceback:\n{traceback.format_exc()}")
+    
+    # Return detailed error response
+    error_response = {
+        'error': 'Internal server error',
+        'error_id': error_id,
+        'error_type': type(error).__name__,
+        'error_message': str(error),
+        'timestamp': datetime.utcnow().isoformat(),
+        'request_info': {
+            'url': request.url,
+            'method': request.method,
+            'endpoint': request.endpoint
+        }
+    }
+    
+    # Add debug information in development
+    if app.debug:
+        error_response['debug_info'] = {
+            'traceback': traceback.format_exc().split('\n'),
+            'request_data': request.get_json(silent=True) if request.is_json else None,
+            'request_args': dict(request.args),
+            'request_form': dict(request.form)
+        }
+    
+    return jsonify(error_response), 500
+
+@app.before_request
+def log_request_info():
+    """Log detailed request information"""
+    logger.debug(f"Request: {request.method} {request.url}")
+    logger.debug(f"Headers: {dict(request.headers)}")
+    if request.is_json:
+        logger.debug(f"JSON Data: {request.get_json(silent=True)}")
+    if request.form:
+        logger.debug(f"Form Data: {dict(request.form)}")
+    if request.args:
+        logger.debug(f"Query Args: {dict(request.args)}")
+
+@app.after_request
+def log_response_info(response):
+    """Log response information"""
+    logger.debug(f"Response Status: {response.status_code}")
+    logger.debug(f"Response Headers: {dict(response.headers)}")
+    return response
+
 @app.errorhandler(404)
 def not_found(error):
     """Handle 404 errors"""
@@ -1657,24 +1991,106 @@ def request_entity_too_large(error):
 
 # Initialize database
 def init_db():
-    """Initialize the database"""
-    with app.app_context():
-        db.create_all()
-        logger.info("Database initialized")
+    """Initialize the database with detailed error handling"""
+    try:
+        with app.app_context():
+            logger.info("Initializing database...")
+            
+            # Check if database file exists and is accessible
+            db_path = app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
+            logger.info(f"Database path: {db_path}")
+            
+            # Create instance directory if it doesn't exist
+            instance_dir = Path('instance')
+            instance_dir.mkdir(exist_ok=True)
+            logger.info(f"Instance directory: {instance_dir.absolute()}")
+            
+            # Test database connection
+            try:
+                with db.engine.connect() as connection:
+                    connection.execute(text('SELECT 1'))
+                logger.info("Database connection test successful")
+            except Exception as e:
+                logger.warning(f"Database connection test failed, will create tables: {e}")
+            
+            # Create all tables
+            db.create_all()
+            logger.info("Database tables created successfully")
+            
+            # Test table creation
+            try:
+                job_count = AnalysisJob.query.count()
+                logger.info(f"Database verification successful. Found {job_count} existing jobs.")
+            except Exception as e:
+                logger.error(f"Database verification failed: {e}")
+                raise
+                
+            logger.info("Database initialization completed successfully")
+            
+    except Exception as e:
+        logger.error(f"Critical error during database initialization: {e}")
+        logger.error(traceback.format_exc())
+        raise
+
+def check_dependencies():
+    """Check if all required dependencies and services are available"""
+    logger.info("=== Checking Dependencies ===")
+    
+    # Check environment variables
+    github_token = os.getenv('GITHUB_TOKEN')
+    if github_token:
+        logger.info("✓ GitHub token found")
+    else:
+        logger.warning("⚠ GitHub token not found - API rate limits may apply")
+    
+    # Check database
+    try:
+        with app.app_context():
+            with db.engine.connect() as connection:
+                connection.execute(text('SELECT 1'))
+            logger.info("✓ Database connection successful")
+    except Exception as e:
+        logger.error(f"✗ Database connection failed: {e}")
+        raise
+    
+    # Check write permissions for temp directory
+    try:
+        temp_test_dir = tempfile.mkdtemp()
+        test_file = Path(temp_test_dir) / 'test.txt'
+        test_file.write_text('test')
+        test_file.unlink()
+        Path(temp_test_dir).rmdir()
+        logger.info("✓ Temporary directory write permissions OK")
+    except Exception as e:
+        logger.error(f"✗ Temporary directory write test failed: {e}")
+        raise
+    
+    logger.info("=== All dependency checks passed ===")
 
 if __name__ == '__main__':
-    # Initialize database
-    init_db()
-    
-    # Configuration
-    host = os.getenv('HOST', '0.0.0.0')
-    port = int(os.getenv('PORT', 5000))
-    debug = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
-    
-    logger.info(f"🚀 Starting Documentation.AI Backend Server")
-    logger.info(f"📍 Server: http://{host}:{port}")
-    logger.info(f"🐛 Debug mode: {debug}")
-    logger.info(f"📊 Database: {app.config['SQLALCHEMY_DATABASE_URI']}")
-    
-    # Start the Flask application
-    app.run(host=host, port=port, debug=debug)
+    try:
+        # Initialize database
+        init_db()
+        
+        # Check dependencies
+        check_dependencies()
+        
+        # Configuration
+        host = os.getenv('HOST', '0.0.0.0')
+        port = int(os.getenv('PORT', 5000))
+        debug = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
+        
+        logger.info(f"🚀 Starting Documentation.AI Backend Server")
+        logger.info(f"📍 Server: http://{host}:{port}")
+        logger.info(f"🐛 Debug mode: {debug}")
+        logger.info(f"📊 Database: {app.config['SQLALCHEMY_DATABASE_URI']}")
+        logger.info(f"🔧 Working directory: {Path.cwd()}")
+        logger.info(f"📁 Instance directory: {Path('instance').absolute()}")
+        
+        # Start the Flask application
+        app.run(host=host, port=port, debug=debug, threaded=True)
+        
+    except Exception as e:
+        logger.error(f"CRITICAL: Failed to start application: {e}")
+        logger.error(traceback.format_exc())
+        raise

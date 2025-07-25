@@ -24,7 +24,7 @@ if (-not (Test-Path ".env")) {
 
 # Start the application
 Write-Host "🎯 Starting Documentation.AI server..." -ForegroundColor Green
-Write-Host "Visit http://localhost:5000 in your browser" -ForegroundColor Cyan
+Write-Host "Visit http://localhost:5002 in your browser" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
 Write-Host ""
