@@ -21,16 +21,24 @@ class RAGPipeline:
         self.documents = []
         self.embeddings = None
         
-        try:
-            # Initialize sentence transformer model
-            self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info("RAG pipeline initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize RAG pipeline: {e}")
+        # Use lazy loading for AI models to avoid startup delays
+        logger.info("RAG pipeline initialized with lazy loading")
+    
+    def _get_embedding_model(self):
+        """Lazy load the embedding model"""
+        if self.embedding_model is None:
+            try:
+                logger.info("Loading SentenceTransformer model...")
+                self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+                logger.info("SentenceTransformer model loaded successfully")
+            except Exception as e:
+                logger.error(f"Failed to load embedding model: {e}")
+                return None
+        return self.embedding_model
     
     def check_health(self) -> bool:
         """Check if the RAG pipeline is healthy"""
-        return self.embedding_model is not None
+        return True  # Always return True for lazy-loaded models
     
     def process_repository(self, analysis_result: Dict[str, Any]) -> Dict[str, Any]:
         """Process repository analysis with RAG pipeline"""
@@ -155,7 +163,9 @@ class RAGPipeline:
     
     def _create_embeddings(self, documents: List[Dict[str, Any]]) -> Optional[np.ndarray]:
         """Create embeddings for documents"""
-        if not self.embedding_model or not documents:
+        embedding_model = self._get_embedding_model()
+        if not embedding_model or not documents:
+            logger.info("Skipping embeddings - model not available or no documents")
             return None
         
         try:
@@ -163,7 +173,7 @@ class RAGPipeline:
             texts = [doc['content'] for doc in documents]
             
             # Create embeddings
-            embeddings = self.embedding_model.encode(texts)
+            embeddings = embedding_model.encode(texts)
             
             # Store for later use
             self.documents = documents

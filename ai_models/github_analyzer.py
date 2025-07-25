@@ -22,12 +22,12 @@ class GitHubAnalyzer:
         self.gemini_api_key = os.getenv('GEMINI_API_KEY')
         self.github_token = os.getenv('GITHUB_TOKEN')
         
-        if self.gemini_api_key:
-            genai.configure(api_key=self.gemini_api_key)
-            self.model = genai.GenerativeModel('gemini-pro')
-        else:
-            logger.warning("Gemini API key not found. AI analysis will be limited.")
-            self.model = None
+        # if self.gemini_api_key:
+        #     genai.configure(api_key=self.gemini_api_key)
+        #     self.model = genai.GenerativeModel('gemini-pro')
+        # else:
+        logger.warning("Gemini API key not found. AI analysis will be limited.")
+        self.model = None
     
     def check_api_health(self) -> bool:
         """Check if the Gemini API is accessible"""

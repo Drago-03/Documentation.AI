@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 
 const ParticleBackground = () => {
-  const canvasRef = useRef(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;

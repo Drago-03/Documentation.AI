@@ -4,7 +4,7 @@ services:
   backend:
     build: .
     ports:
-      - "5000:5000"
+      - "5002:5002"
     environment:
       - FLASK_ENV=production
       - DATABASE_URL=postgresql://user:password@db:5432/documentation_ai

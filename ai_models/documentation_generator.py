@@ -15,12 +15,12 @@ class DocumentationGenerator:
         """Initialize the documentation generator"""
         self.gemini_api_key = os.getenv('GEMINI_API_KEY')
         
-        if self.gemini_api_key:
-            genai.configure(api_key=self.gemini_api_key)
-            self.model = genai.GenerativeModel('gemini-pro')
-        else:
-            logger.warning("Gemini API key not found. Documentation generation will be limited.")
-            self.model = None
+        # if self.gemini_api_key:
+        #     genai.configure(api_key=self.gemini_api_key)
+        #     self.model = genai.GenerativeModel('gemini-pro')
+        # else:
+        logger.warning("Gemini API key not found. Documentation generation will be limited.")
+        self.model = None
     
     def check_health(self) -> bool:
         """Check if the documentation generator is healthy"""

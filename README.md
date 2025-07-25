@@ -48,53 +48,71 @@ Transform your GitHub repositories into professionally documented projects with 
 - **Git** for repository cloning
 - **API Keys** (see Configuration section)
 
+## 📁 Project Structure
+
+```
+Documentation.AI/
+├── 📂 ai_models/          # AI and ML components
+├── 📂 database/           # Database models and configuration
+├── 📂 frontend/           # React frontend application
+├── 📂 scripts/            # Setup and utility scripts
+├── 📂 tests/              # Test suite and testing utilities
+├── 📂 utils/              # Utility functions and helpers
+├── 📄 app.py              # Main Flask application
+├── 📄 start.sh            # Quick start script (Linux/macOS)
+├── 📄 stop.sh             # Stop script (Linux/macOS)
+├── 📄 requirements.txt    # Python dependencies
+├── 📄 .env.example        # Environment configuration template
+└── 📄 README.md           # Project documentation
+```
+
 ## 🚀 Quick Start
 
-### Option 1: Automated Setup (Recommended)
+### Simple Setup & Start
 
-#### Windows (PowerShell)
+#### Linux/macOS (Recommended)
+```bash
+# Clone the repository
+git clone https://github.com/Drago-03/Documentation.AI.git
+cd Documentation.AI
+
+# Start the application (handles setup automatically)
+./start.sh
+```
+
+#### Windows
 ```powershell
 # Clone the repository
 git clone https://github.com/Drago-03/Documentation.AI.git
 cd Documentation.AI
 
-# Run PowerShell setup script
-.\setup.ps1
+# Run setup script (one-time)
+./scripts/setup.ps1
+
+# Start the application
+python app.py
 ```
 
-#### Windows (Command Prompt)
-```cmd
-# Clone the repository
-git clone https://github.com/Drago-03/Documentation.AI.git
-cd Documentation.AI
-
-# Run batch setup script
-setup.bat
-```
-
-#### Linux/macOS
+#### To Stop
 ```bash
-# Clone the repository
-git clone https://github.com/Drago-03/Documentation.AI.git
-cd Documentation.AI
+# Linux/macOS
+./stop.sh
 
-# Make setup script executable and run
-chmod +x setup.sh
-./setup.sh
+# Windows - Press Ctrl+C in the terminal
 ```
 
-### Option 2: Manual Setup
+### Manual Setup (Advanced Users)
 
 #### 1. Backend Setup
 ```bash
 # Create and activate virtual environment
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
+python3 -m venv .venv
 
 # Linux/macOS
-source venv/bin/activate
+source .venv/bin/activate
+
+# Windows
+.venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
@@ -116,10 +134,14 @@ cp .env.example .env
 # Edit .env with your API keys (see Configuration section)
 ```
 
-#### 4. Database Setup
+#### 4. Start Servers
 ```bash
-# Initialize database (automatic on first run)
+# Start backend
 python app.py
+
+# In another terminal, start frontend (optional - for development)
+cd frontend
+npm start
 ```
 
 ## ⚙️ Configuration
@@ -145,7 +167,7 @@ DATABASE_URL=sqlite:///documentation_ai.db
 
 # Server Configuration
 HOST=0.0.0.0
-PORT=5000
+PORT=5002
 ```
 
 ### Getting API Keys
@@ -192,7 +214,7 @@ cd ..
 python app.py
 ```
 
-Visit `http://localhost:5000` to access the application.
+Visit `http://localhost:5002` to access the application.
 
 ### Using the Web Interface
 
@@ -307,7 +329,7 @@ cd frontend
 docker build -t documentation-ai-frontend .
 
 # Run containers
-docker run -p 5000:5000 documentation-ai-backend
+docker run -p 5002:5002 documentation-ai-backend
 ```
 
 ## 🚀 Production Deployment
@@ -325,7 +347,7 @@ DATABASE_URL=postgresql://user:pass@host:port/dbname
 pip install gunicorn
 
 # Start with gunicorn
-gunicorn -w 4 -b 0.0.0.0:5000 app:app
+gunicorn -w 4 -b 0.0.0.0:5002 app:app
 ```
 
 ### Nginx Configuration
@@ -335,7 +357,7 @@ server {
     server_name yourdomain.com;
 
     location / {
-        proxy_pass http://localhost:5000;
+        proxy_pass http://localhost:5002;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;

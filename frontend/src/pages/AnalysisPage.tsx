@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
 const AnalysisPage = () => {
+  const navigate = useNavigate();
   const [repoUrl, setRepoUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -44,8 +46,8 @@ const AnalysisPage = () => {
 
       if (response.data.job_id) {
         toast.success('Analysis completed successfully!');
-        // Navigate to results page
-        window.location.href = `/results/${response.data.job_id}`;
+        // Navigate to repository view
+        navigate(`/repository/${response.data.job_id}`);
       }
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Analysis failed. Please try again.');
